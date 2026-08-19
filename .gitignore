@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Captured data (large binaries / generated CSVs, not committed)
+data/raw/*
+!data/raw/.gitkeep
+data/manifest.csv
+data/*.csv
+
+# Training artifacts
+training/checkpoints/
+*.pt
+*.pth
+
+# Editor
+.vscode/
+
+# Private planning notes
+CONTEXT.md

@@ -1,0 +1,12 @@
+# CARLA Python API - version MUST match your CARLA server version exactly.
+# Install from the .whl shipped with your CARLA release if this pip name doesn't match, e.g.:
+#   pip install carla==0.9.16
+carla==0.9.16
+
+numpy
+pandas
+opencv-python
+pyyaml
+
+# Added later (model training):
+# torch

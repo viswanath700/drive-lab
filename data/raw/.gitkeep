@@ -1,0 +1,1 @@
+# Keeps data/raw tracked in git even though its contents (captured frames) are ignored.

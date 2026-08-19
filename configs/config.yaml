@@ -1,0 +1,35 @@
+# DriveLab config - single source of truth for sim/data collection parameters.
+# Keep this human-readable; scripts should read from here instead of hardcoding values.
+
+carla:
+  host: localhost
+  port: 2000
+  timeout_sec: 10.0
+  town: Town01          # set to null to use whatever map the server currently has loaded
+  fixed_delta_seconds: 0.05   # synchronous mode tick length -> 20 Hz simulation
+
+vehicle:
+  blueprint: vehicle.tesla.model3
+  spawn_point_index: null   # null = pick a random spawn point
+  autopilot: true
+
+camera:
+  blueprint: sensor.camera.rgb
+  width: 800
+  height: 600
+  fov: 90
+  # Mounted roughly at windshield height, facing forward.
+  transform:
+    x: 1.5
+    y: 0.0
+    z: 2.4
+    pitch: 0.0
+    yaw: 0.0
+    roll: 0.0
+
+capture:
+  output_dir: data/raw
+  manifest_path: data/manifest.csv
+  scenario_id: baseline_autopilot_town01
+  split: train
+  max_frames: 2000
