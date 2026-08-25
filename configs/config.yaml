@@ -10,8 +10,11 @@ carla:
 
 vehicle:
   blueprint: vehicle.tesla.model3
-  spawn_point_index: null   # null = pick a random spawn point
+  spawn_point_index: null   # null = random spawn point each run (key to route/data diversity)
   autopilot: true
+
+traffic:
+  num_vehicles: 15   # background NPC vehicles (lane-following, stopping distance, merges); 0 = none
 
 camera:
   blueprint: sensor.camera.rgb

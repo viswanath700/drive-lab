@@ -19,6 +19,7 @@ import csv
 import logging
 import math
 import queue
+import random
 import sys
 from pathlib import Path
 
@@ -51,6 +52,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=str, default=None, help="Path to config YAML.")
     parser.add_argument("--frames", type=int, default=None, help="Override capture.max_frames.")
+    parser.add_argument(
+        "--scenario-id", type=str, default=None, help="Override capture.scenario_id."
+    )
     parser.add_argument(
         "--verbose", action="store_true", help="List available blueprints and spawn points."
     )
@@ -103,7 +107,7 @@ def spawn_ego_vehicle(world: "carla.World", vehicle_cfg: dict) -> "carla.Vehicle
         raise RuntimeError("No spawn points available on this map.")
 
     index = vehicle_cfg.get("spawn_point_index")
-    spawn_point = spawn_points[index] if index is not None else spawn_points[0]
+    spawn_point = spawn_points[index] if index is not None else random.choice(spawn_points)
 
     vehicle = world.try_spawn_actor(vehicle_bp, spawn_point)
     if vehicle is None:
@@ -116,6 +120,30 @@ def spawn_ego_vehicle(world: "carla.World", vehicle_cfg: dict) -> "carla.Vehicle
         logger.info("Autopilot enabled.")
 
     return vehicle
+
+
+def spawn_background_traffic(world: "carla.World", count: int) -> list:
+    """Spawn NPC vehicles under autopilot so the ego encounters other traffic
+    (lane-following, stopping distance, merges) instead of an empty road."""
+    if count <= 0:
+        return []
+
+    blueprint_library = world.get_blueprint_library()
+    vehicle_bps = blueprint_library.filter("vehicle.*")
+    spawn_points = list(world.get_map().get_spawn_points())
+    random.shuffle(spawn_points)
+
+    traffic_actors = []
+    for spawn_point in spawn_points:
+        if len(traffic_actors) >= count:
+            break
+        npc = world.try_spawn_actor(random.choice(vehicle_bps), spawn_point)
+        if npc is not None:
+            npc.set_autopilot(True)
+            traffic_actors.append(npc)
+
+    logger.info("Spawned %d background traffic vehicles", len(traffic_actors))
+    return traffic_actors
 
 
 def attach_rgb_camera(
@@ -225,6 +253,8 @@ def main() -> None:
 
     if args.frames is not None:
         config["capture"]["max_frames"] = args.frames
+    if args.scenario_id is not None:
+        config["capture"]["scenario_id"] = args.scenario_id
 
     client, world = connect_and_get_world(config["carla"])
 
@@ -237,12 +267,16 @@ def main() -> None:
 
     vehicle = None
     camera = None
+    traffic_actors: list = []
     try:
         vehicle = spawn_ego_vehicle(world, config["vehicle"])
         camera = attach_rgb_camera(world, vehicle, config["camera"])
+        traffic_actors = spawn_background_traffic(
+            world, config.get("traffic", {}).get("num_vehicles", 0)
+        )
         run_capture_loop(world, vehicle, camera, config["capture"])
     finally:
-        teardown(client, world, original_settings, traffic_manager, [camera, vehicle])
+        teardown(client, world, original_settings, traffic_manager, [camera, vehicle, *traffic_actors])
 
 
 if __name__ == "__main__":
