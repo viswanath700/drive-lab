@@ -15,6 +15,10 @@ training/checkpoints/
 *.pt
 *.pth
 
+# Generated preview videos
+viz/output/*
+!viz/output/.gitkeep
+
 # Editor
 .vscode/
 
