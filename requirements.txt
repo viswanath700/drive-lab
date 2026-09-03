@@ -8,5 +8,6 @@ pandas
 opencv-python
 pyyaml
 
-# Added later (model training):
-# torch
+# Model training
+torch
+torchvision
