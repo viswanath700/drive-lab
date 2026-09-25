@@ -36,3 +36,4 @@ capture:
   scenario_id: baseline_autopilot_town01
   split: train
   max_frames: 2000
+  warmup_ticks: 4

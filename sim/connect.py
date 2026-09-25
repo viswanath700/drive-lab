@@ -187,6 +187,13 @@ def run_capture_loop(
     image_queue: "queue.Queue" = queue.Queue()
     camera.listen(image_queue.put)
 
+    # skip first few frames to avoid unrealistic motion during the vehicle spawn
+    warmup_ticks = capture_cfg["warmup_ticks"]
+    logger.info("Warming up for %d ticks (vehicle settling)...", warmup_ticks)
+    for _ in range(warmup_ticks):
+        world.tick()
+        image_queue.get(timeout=2.0)  # drain and discard — don't record
+
     max_frames = capture_cfg["max_frames"]
     scenario_id = capture_cfg["scenario_id"]
     split = capture_cfg["split"]
@@ -200,8 +207,14 @@ def run_capture_loop(
 
         for i in range(max_frames):
             frame_id = world.tick()
-            image = image_queue.get()
+            image = image_queue.get(timeout=2.0) # Added timeout, so a stuck run fails loudly
+            if image.frame != frame_id:
+                logger.warning("Frame mismatch: expected %d, got %d — skipping", frame_id, image.frame)
+                continue
 
+            # Read control AFTER tick(), not before: this returns the control that was
+            # actually applied during the physics step just completed, so it stays
+            # aligned with the image/frame captured for that same tick.
             control = vehicle.get_control()
             speed = vehicle_speed_kmh(vehicle)
             timestamp = world.get_snapshot().timestamp.elapsed_seconds
@@ -222,6 +235,7 @@ def run_capture_loop(
                     "split": split,
                 }
             )
+            f.flush() # If this becomes a bottleneck, do it every 10-20 frames instead
 
             if (i + 1) % 100 == 0 or (i + 1) == max_frames:
                 logger.info("Captured %d/%d frames", i + 1, max_frames)
