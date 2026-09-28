@@ -38,11 +38,10 @@ def parse_args() -> argparse.Namespace:
         nargs="+",
         default=None,
         help=(
-            "Scenario IDs to hold out for validation. If omitted, defaults to "
-            "whichever scenario_id sorts last alphabetically — prefer passing "
-            "this explicitly once you have more than a couple of scenarios, "
-            "since alphabetical sort order is not a reliable proxy for "
-            "'the session you intended to hold out.'"
+            "Scenario IDs to hold out for validation instead of using the manifest's "
+            "split column. Ignores the split column entirely (pools train+val rows "
+            "for the listed scenarios vs. the rest) — use for ad hoc holdouts, e.g. "
+            "validating generalization to one held-out obstacle scenario."
         ),
     )
     return parser.parse_args()
@@ -51,25 +50,26 @@ def parse_args() -> argparse.Namespace:
 def build_datasets(
     manifest_path: Path, validation_scenarios: list[str] | None
 ) -> tuple[DrivingDataset, DrivingDataset]:
+    if validation_scenarios is None:
+        # Default: trust the manifest's own split column (set per capture session).
+        return (
+            DrivingDataset(manifest_path, "train"),
+            DrivingDataset(manifest_path, "val"),
+        )
+
     manifest = pd.read_csv(manifest_path)
     scenario_ids = sorted(manifest["scenario_id"].unique())
-
-    if validation_scenarios is None:
-        if len(scenario_ids) < 2:
-            raise ValueError("Need at least two scenario_ids for a scenario-held-out validation set.")
-        validation_scenarios = [scenario_ids[-1]]
-    else:
-        unknown = set(validation_scenarios) - set(scenario_ids)
-        if unknown:
-            raise ValueError(f"Unknown validation scenario_id(s): {sorted(unknown)}")
+    unknown = set(validation_scenarios) - set(scenario_ids)
+    if unknown:
+        raise ValueError(f"Unknown validation scenario_id(s): {sorted(unknown)}")
 
     training_scenarios = [s for s in scenario_ids if s not in validation_scenarios]
     if not training_scenarios:
         raise ValueError("No scenario_ids left for training after removing validation scenarios.")
 
     return (
-        DrivingDataset(manifest_path, "train", scenario_ids=training_scenarios),
-        DrivingDataset(manifest_path, "train", scenario_ids=validation_scenarios),
+        DrivingDataset(manifest_path, split=None, scenario_ids=training_scenarios),
+        DrivingDataset(manifest_path, split=None, scenario_ids=validation_scenarios),
     )
 
 

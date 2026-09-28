@@ -34,10 +34,12 @@ class DrivingDataset(Dataset[tuple[Tensor, Tensor]]):
     def __init__(
         self,
         manifest_path: str | Path,
-        split: str,
+        split: str | None,
         image_size: tuple[int, int] = (192, 256),
         scenario_ids: list[str] | None = None,
     ) -> None:
+        """`split`: manifest split value to filter to ("train"/"val"), or None to
+        skip the split filter and select purely by `scenario_ids` instead."""
         self.manifest_path = Path(manifest_path)
         if not self.manifest_path.is_absolute():
             self.manifest_path = REPO_ROOT / self.manifest_path
@@ -48,12 +50,12 @@ class DrivingDataset(Dataset[tuple[Tensor, Tensor]]):
         if missing_columns:
             raise ValueError(f"Manifest is missing columns: {sorted(missing_columns)}")
 
-        self.records = manifest[manifest["split"] == split]
+        self.records = manifest if split is None else manifest[manifest["split"] == split]
         if scenario_ids is not None:
             self.records = self.records[self.records["scenario_id"].isin(scenario_ids)]
         self.records = self.records.reset_index(drop=True)
         if self.records.empty:
-            raise ValueError(f"No records found for split={split!r} in {self.manifest_path}")
+            raise ValueError(f"No records found for split={split!r}, scenario_ids={scenario_ids} in {self.manifest_path}")
 
         self.image_size = image_size
         self._check_aspect_ratio()
