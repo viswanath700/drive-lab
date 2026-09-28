@@ -16,6 +16,13 @@ vehicle:
 traffic:
   num_vehicles: 15   # background NPC vehicles (lane-following, stopping distance, merges); 0 = none
 
+weather:
+  # Any carla.WeatherParameters preset name, e.g. ClearNoon, CloudyNoon, WetNoon,
+  # WetCloudyNoon, MidRainyNoon, HardRainNoon, SoftRainNoon, ClearSunset, CloudySunset,
+  # WetSunset, WetCloudySunset, MidRainSunset, HardRainSunset, SoftRainSunset.
+  # null = leave whatever weather the server currently has.
+  preset: ClearNoon
+
 camera:
   blueprint: sensor.camera.rgb
   width: 800

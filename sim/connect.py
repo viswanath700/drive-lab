@@ -56,6 +56,19 @@ def parse_args() -> argparse.Namespace:
         "--scenario-id", type=str, default=None, help="Override capture.scenario_id."
     )
     parser.add_argument(
+        "--split",
+        type=str,
+        default=None,
+        choices=["train", "val"],
+        help="Override capture.split.",
+    )
+    parser.add_argument(
+        "--weather",
+        type=str,
+        default=None,
+        help="Override weather.preset with a carla.WeatherParameters name (e.g. ClearNoon, WetNoon, HardRainSunset).",
+    )
+    parser.add_argument(
         "--verbose", action="store_true", help="List available blueprints and spawn points."
     )
     return parser.parse_args()
@@ -87,6 +100,26 @@ def enable_synchronous_mode(client: "carla.Client", world: "carla.World", fixed_
     traffic_manager.set_synchronous_mode(True)
 
     return original_settings, traffic_manager
+
+
+def apply_weather(world: "carla.World", weather_cfg: dict) -> None:
+    """Set world weather from a named carla.WeatherParameters preset (e.g. ClearNoon).
+
+    Weather is a world-level property, not tied to the ego vehicle, so this only
+    needs to run once per session before capture starts.
+    """
+    preset_name = (weather_cfg or {}).get("preset")
+    if not preset_name:
+        return
+
+    preset = getattr(carla.WeatherParameters, preset_name, None)
+    if preset is None:
+        raise ValueError(
+            f"Unknown weather preset '{preset_name}'. Must match a carla.WeatherParameters "
+            "attribute, e.g. ClearNoon, CloudyNoon, WetNoon, HardRainSunset."
+        )
+    world.set_weather(preset)
+    logger.info("Weather set to preset '%s'", preset_name)
 
 
 def log_blueprints_and_spawn_points(world: "carla.World") -> None:
@@ -269,8 +302,13 @@ def main() -> None:
         config["capture"]["max_frames"] = args.frames
     if args.scenario_id is not None:
         config["capture"]["scenario_id"] = args.scenario_id
+    if args.split is not None:
+        config["capture"]["split"] = args.split
+    if args.weather is not None:
+        config.setdefault("weather", {})["preset"] = args.weather
 
     client, world = connect_and_get_world(config["carla"])
+    apply_weather(world, config.get("weather", {}))
 
     if args.verbose:
         log_blueprints_and_spawn_points(world)

@@ -31,11 +31,14 @@ Comfortable with CARLA/PyTorch/OpenCV now after building the initial pipeline.
 Data collection, dataset prep, and a smoke-test training loop are DONE (see "Implemented"
 below). The active next step is:
 
-**Add deliberately controlled obstacle scenarios (stalled vehicle, cones, slow lead vehicle),
-then collect them as distinct, correctly labeled train/validation scenario sets.**
+**Grow the baseline dataset to ~12,000 frames (10,000 train / 2,000 val) across diverse
+spawn points, traffic, and weather conditions, via multiple ~1000-frame sessions, each with
+a correctly-set `split` and a distinct `scenario_id`. Obstacle-scenario fine-tuning comes
+after this, not now.**
 
-Do not propose closed-loop learned-policy driving, multi-epoch tuning, or evaluation metrics
-until obstacle-scenario data exists — those depend on it. Suggest them as "later" notes only.
+Do not propose closed-loop learned-policy driving, multi-epoch tuning, evaluation metrics,
+or obstacle scenarios until this diverse baseline dataset is collected — those depend on it.
+Suggest them as "later" notes only.
 
 ## Implemented (don't redo, extend carefully)
 - CARLA connection, map loading, synchronous-mode ticking (world.tick() per timestep).
