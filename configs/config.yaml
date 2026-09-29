@@ -44,3 +44,46 @@ capture:
   split: train
   max_frames: 2000
   warmup_ticks: 4
+
+# Scripted obstacle scenarios: reproducible ego + obstacle placements for
+# obstacle-avoidance data collection (see sim/connect.py --scenario).
+# Coordinates are explicit world-space transforms (NOT spawn_point_index) so a
+# scenario places actors at the exact same spot every run. This block doubles
+# as the scenario parameter log (obstacle type/placement per session_id).
+#
+# TODO: the x/y/z/yaw values below are placeholders. Discover real coordinates
+# by running `python -m sim.connect --verbose` to list spawn points, driving/
+# spawning near a candidate spot, and reading its carla.Location from the logs.
+scenarios:
+  obstacle_stalled_session1:
+    obstacle_type: stalled_vehicle
+    ego_spawn: {x: 0.0, y: 0.0, z: 0.3, yaw: 0.0}
+    obstacles:
+      - blueprint: vehicle.tesla.model3
+        x: 30.0
+        y: 0.0
+        z: 0.3
+        yaw: 0.0
+        autopilot: false   # stays stationary; hand_brake is applied in code
+
+  obstacle_cone_session1:
+    obstacle_type: cone
+    ego_spawn: {x: 0.0, y: 0.0, z: 0.3, yaw: 0.0}
+    obstacles:
+      - blueprint: static.prop.trafficcone01
+        x: 30.0
+        y: 0.0
+        z: 0.0
+        yaw: 0.0
+
+  obstacle_slowlead_session1:
+    obstacle_type: slow_lead
+    ego_spawn: {x: 0.0, y: 0.0, z: 0.3, yaw: 0.0}
+    obstacles:
+      - blueprint: vehicle.mini.cooper_s
+        x: 20.0
+        y: 0.0
+        z: 0.3
+        yaw: 0.0
+        autopilot: true
+        target_speed_kmh: 15   # forces a slow pace so the ego has to overtake

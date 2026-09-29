@@ -56,6 +56,16 @@ def parse_args() -> argparse.Namespace:
         "--scenario-id", type=str, default=None, help="Override capture.scenario_id."
     )
     parser.add_argument(
+        "--scenario",
+        type=str,
+        default=None,
+        help=(
+            "Name of a configs/config.yaml scenarios: entry (e.g. obstacle_cone_session1). "
+            "Overrides the ego spawn transform and spawns the scenario's obstacle actor(s). "
+            "Also defaults capture.scenario_id to this name unless --scenario-id is given."
+        ),
+    )
+    parser.add_argument(
         "--split",
         type=str,
         default=None,
@@ -135,16 +145,19 @@ def spawn_ego_vehicle(world: "carla.World", vehicle_cfg: dict) -> "carla.Vehicle
     blueprint_library = world.get_blueprint_library()
     vehicle_bp = blueprint_library.find(vehicle_cfg["blueprint"])
 
-    spawn_points = world.get_map().get_spawn_points()
-    if not spawn_points:
-        raise RuntimeError("No spawn points available on this map.")
-
-    index = vehicle_cfg.get("spawn_point_index")
-    spawn_point = spawn_points[index] if index is not None else random.choice(spawn_points)
+    spawn_transform_cfg = vehicle_cfg.get("spawn_transform")
+    if spawn_transform_cfg is not None:
+        spawn_point = build_transform(spawn_transform_cfg, world)
+    else:
+        spawn_points = world.get_map().get_spawn_points()
+        if not spawn_points:
+            raise RuntimeError("No spawn points available on this map.")
+        index = vehicle_cfg.get("spawn_point_index")
+        spawn_point = spawn_points[index] if index is not None else random.choice(spawn_points)
 
     vehicle = world.try_spawn_actor(vehicle_bp, spawn_point)
     if vehicle is None:
-        raise RuntimeError(f"Failed to spawn vehicle at spawn point index {index}.")
+        raise RuntimeError(f"Failed to spawn vehicle at {spawn_point.location}.")
 
     logger.info("Spawned ego vehicle %s (id=%d) at %s", vehicle_cfg["blueprint"], vehicle.id, spawn_point.location)
 
@@ -153,6 +166,53 @@ def spawn_ego_vehicle(world: "carla.World", vehicle_cfg: dict) -> "carla.Vehicle
         logger.info("Autopilot enabled.")
 
     return vehicle
+
+
+def build_transform(transform_cfg: dict, world: "carla.World") -> "carla.Transform":
+    """Build a carla.Transform from explicit x/y/z/yaw config, snapping z to the
+    road surface at that (x, y) so obstacle/ego actors don't spawn underground
+    or floating — only x/y/yaw come from the config, height comes from the map.
+    """
+    location = carla.Location(x=transform_cfg["x"], y=transform_cfg["y"])
+    waypoint = world.get_map().get_waypoint(location, project_to_road=True)
+    location.z = waypoint.transform.location.z + transform_cfg.get("z", 0.3)
+    rotation = carla.Rotation(yaw=transform_cfg.get("yaw", 0.0))
+    return carla.Transform(location, rotation)
+
+
+def spawn_obstacles(
+    world: "carla.World", obstacles_cfg: list[dict], traffic_manager: "carla.TrafficManager"
+) -> list:
+    """Spawn the obstacle actor(s) for a scripted scenario (stalled vehicle,
+    cone/barrier, or slow lead vehicle) per configs/config.yaml's scenarios: block.
+    """
+    blueprint_library = world.get_blueprint_library()
+    actors = []
+    for obstacle_cfg in obstacles_cfg:
+        bp_id = obstacle_cfg["blueprint"]
+        blueprint = blueprint_library.find(bp_id)
+        transform = build_transform(obstacle_cfg, world)
+
+        actor = world.try_spawn_actor(blueprint, transform)
+        if actor is None:
+            raise RuntimeError(f"Failed to spawn obstacle '{bp_id}' at {transform.location}.")
+        logger.info("Spawned obstacle %s (id=%d) at %s", bp_id, actor.id, transform.location)
+
+        if bp_id.startswith("vehicle."):
+            if obstacle_cfg.get("autopilot", False):
+                actor.set_autopilot(True, traffic_manager.get_port())
+                target_speed = obstacle_cfg.get("target_speed_kmh")
+                if target_speed is not None:
+                    traffic_manager.set_desired_speed(actor, target_speed)
+            else:
+                # No autopilot and no control ever applied would leave the vehicle
+                # coasting/settling under physics; hand_brake keeps it truly stationary
+                # for the whole capture (used for the stalled-vehicle obstacle type).
+                actor.apply_control(carla.VehicleControl(hand_brake=True))
+
+        actors.append(actor)
+
+    return actors
 
 
 def spawn_background_traffic(world: "carla.World", count: int) -> list:
@@ -298,6 +358,19 @@ def main() -> None:
     args = parse_args()
     config = load_config(args.config)
 
+    obstacles_cfg: list = []
+    if args.scenario is not None:
+        scenarios = config.get("scenarios", {})
+        scenario_cfg = scenarios.get(args.scenario)
+        if scenario_cfg is None:
+            raise SystemExit(
+                f"Unknown scenario '{args.scenario}'. Available: {sorted(scenarios)}"
+            )
+        config["vehicle"]["spawn_transform"] = scenario_cfg["ego_spawn"]
+        obstacles_cfg = scenario_cfg.get("obstacles", [])
+        if args.scenario_id is None:
+            config["capture"]["scenario_id"] = args.scenario
+
     if args.frames is not None:
         config["capture"]["max_frames"] = args.frames
     if args.scenario_id is not None:
@@ -320,15 +393,23 @@ def main() -> None:
     vehicle = None
     camera = None
     traffic_actors: list = []
+    obstacle_actors: list = []
     try:
         vehicle = spawn_ego_vehicle(world, config["vehicle"])
         camera = attach_rgb_camera(world, vehicle, config["camera"])
         traffic_actors = spawn_background_traffic(
             world, config.get("traffic", {}).get("num_vehicles", 0)
         )
+        obstacle_actors = spawn_obstacles(world, obstacles_cfg, traffic_manager)
         run_capture_loop(world, vehicle, camera, config["capture"])
     finally:
-        teardown(client, world, original_settings, traffic_manager, [camera, vehicle, *traffic_actors])
+        teardown(
+            client,
+            world,
+            original_settings,
+            traffic_manager,
+            [camera, vehicle, *traffic_actors, *obstacle_actors],
+        )
 
 
 if __name__ == "__main__":
